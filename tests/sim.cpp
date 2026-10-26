@@ -22,15 +22,16 @@ static Result play(unsigned seed, Profession p, int month, bool careful)
     MtRng rng(seed);
     Trail t(rng, p, month, {"A", "B", "C", "D", "E"});
     // Shopping list scaled to the purse.
-    int yokes = p == Profession::Farmer ? 3 : 4;
+    const bool poor = t.sup.cash <= 400;
+    int yokes = poor ? 3 : 4;
     t.buy(Item::Oxen, yokes);
     double budget = t.sup.cash;
     if (careful) {
         t.buy(Item::Wheel, 1); t.buy(Item::Axle, 1); t.buy(Item::Tongue, 1);
     }
     t.buy(Item::Clothing, 5);
-    t.buy(Item::Bullets, p == Profession::Farmer ? 12 : 6);
-    int foodLb = int((t.sup.cash - (p == Profession::Farmer ? 0 : 60)) / t.price(Item::Food));
+    t.buy(Item::Bullets, poor ? 12 : 6);
+    int foodLb = int((t.sup.cash - (poor ? 0 : 60)) / t.price(Item::Food));
     t.buy(Item::Food, std::min(foodLb, 1500));
     (void)budget;
 
@@ -55,6 +56,7 @@ static Result play(unsigned seed, Profession p, int month, bool careful)
         if (t.sup.food <= 0) starved = true;
         // Late starts have no time to dawdle: push on, rest only when really ill.
         bool late = false;
+        if (t.pendingEncounter() != Encounter::None) { int k = t.simulatedKills(); t.resolveEncounter(k, 10); }
         // Sick or worn-out party: rest, if the schedule allows.
         double daysLeft = (2040 - t.miles) / 16.0 * 1.15;
         int slack = (t.startMonth <= 5 ? 245 : 214 - 30 * (t.startMonth - 6)) - t.day;
@@ -79,7 +81,7 @@ int main(int argc, char **argv)
 {
     int n = argc > 1 ? std::atoi(argv[1]) : 2000;
     bool careful = !(argc > 2 && std::string(argv[2]) == "reckless");
-    const Profession profs[] = {Profession::Banker, Profession::Carpenter, Profession::Farmer};
+    const Profession profs[] = {Profession::Banker, Profession::Doctor, Profession::Blacksmith, Profession::Teacher};
     std::printf("%-10s %-6s %8s %8s %9s %8s %8s %8s\n", "profession", "month", "arrive%", "avgDays", "avgAlive", "avgScore", "leader+", "starved");
     for (Profession p : profs) {
         for (int month = 3; month <= 7; ++month) {

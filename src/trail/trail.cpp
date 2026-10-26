@@ -78,7 +78,7 @@ const char *name(Rations r)
 }
 const char *name(Profession p)
 {
-    static const char *n[] = {"Banker", "Carpenter", "Farmer"};
+    static const char *n[] = {"Banker", "Doctor", "Merchant", "Blacksmith", "Carpenter", "Saddlemaker", "Farmer", "Teacher"};
     return n[int(p)];
 }
 
@@ -96,7 +96,7 @@ Trail::Trail(Rng &rng, Profession p, int startMonth, std::array<std::string, 5> 
 {
     for (int i = 0; i < 5; ++i)
         party[i].name = names[i];
-    sup.cash = p == Profession::Banker ? tune::kBanker : p == Profession::Carpenter ? tune::kCarpenter : tune::kFarmer;
+    sup.cash = tune::kStartCash[int(p)];
     for (int m = startMonth - 1; m < 12; ++m) deadline_ += kMonthDays[m];   // January 1st, 1849
     rollWeather();
 }
@@ -306,6 +306,7 @@ void Trail::passDay(bool resting, std::vector<Note> &n)
 std::vector<Note> Trail::rest(int days)
 {
     std::vector<Note> n;
+    abandonEncounter();
     for (int i = 0; i < days && !wiped; ++i) passDay(true, n);
     return n;
 }
@@ -313,16 +314,33 @@ std::vector<Note> Trail::rest(int days)
 std::vector<Note> Trail::travelDay()
 {
     std::vector<Note> n;
+    abandonEncounter();
     if (wiped || won) return n;
-    if (sup.oxen < 2) {
-        n.push_back({"You have too few oxen to pull the wagon. Buy or trade for more.", true});
+    if (sup.oxen == 0) {
+        // No team at all. At a store you can still buy one; anywhere else that's the end of the trail.
+        bool store = miles == 0 || (atLandmark_ && (here().kind == Kind::Fort || here().kind == Kind::Start));
+        if (store && sup.cash >= price(Item::Oxen)) {
+            n.push_back({"You have no oxen to pull the wagon. Buy a team before you go on.", true});
+        } else {
+            n.push_back({"All your oxen are gone and there is no way to get more. You are stranded.", true});
+            wiped = true;
+        }
         return n;
     }
+    // With one ox the wagon crawls (speed() scales with the team).
     leave();
     double step = speed();
     double target = next_ < int(kLandmarks.size()) ? kLandmarks[next_].mile : miles;
     bool arriving = miles + step >= target;
+    double before = miles;
     miles = arriving ? target : miles + step;
+    for (const Grave &g : graves_) {                      // an event: someone died here once
+        if (before < g.mile && g.mile <= miles) {
+            passed_.push_back(g);
+            n.push_back({"You pass the grave of " + g.name + ", who died of " + g.cause + " near mile " +
+                             std::to_string(g.mile) + ".", false});
+        }
+    }
     passDay(false, n);
     if (wiped) return n;
     if (arriving) {
@@ -357,7 +375,7 @@ void Trail::randomEvent(std::vector<Note> &n)
     if (r() >= tune::kEventChance) return;
     struct Ev { int weight; int id; };
     static const Ev evs[] = {{10, 0}, {8, 1}, {10, 2}, {7, 3}, {4, 4}, {5, 5},
-                             {8, 6},  {2, 7}, {6, 8},  {4, 9}, {3, 10}, {3, 11}};
+                             {8, 6},  {2, 7}, {6, 8},  {4, 9}, {3, 10}, {3, 11}, {tune::kBanditWeight, 12}, {tune::kWolfWeight, 13}};
     int total = 0;
     for (auto &e : evs) total += e.weight;
     int pick = int(r() * total), id = 0;
@@ -444,6 +462,16 @@ void Trail::randomEvent(std::vector<Note> &n)
             n.push_back({m->name + " broke a leg.", true});
         }
         break;
+    case 12:
+        encounter_ = Encounter::Bandits;
+        encounterSize_ = 3 + int(r() * 3);
+        n.push_back({"Bandits attack the wagon!", true});
+        break;
+    case 13:
+        encounter_ = Encounter::Wolves;
+        encounterSize_ = 3 + int(r() * 3);
+        n.push_back({"A pack of wolves attacks!", true});
+        break;
     default:
         sup.food += 30;
         n.push_back({"Friendly travelers share 30 pounds of food with you.", false});
@@ -451,11 +479,111 @@ void Trail::randomEvent(std::vector<Note> &n)
     }
 }
 
+// --- fights ------------------------------------------------------------------
+
+void Trail::abandonEncounter()
+{
+    if (encounter_ != Encounter::None)
+        resolveEncounter(0, 0);
+}
+
+std::vector<Note> Trail::resolveEncounter(int killed, int bulletsUsed, int hits, int wagonHits)
+{
+    std::vector<Note> n;
+    if (encounter_ == Encounter::None) return n;
+    Encounter e = encounter_;
+    int total = encounterSize_;
+    encounter_ = Encounter::None;
+    encounterSize_ = 0;
+
+    sup.bullets = std::max(0, sup.bullets - bulletsUsed);
+    int left = std::max(0, total - killed);
+
+    // Return fire: the shooter (the party leader's hand) takes the wounds.
+    auto aftermath = [&] {
+        if (hits > 0) {
+            Member &lead = party[0].alive ? party[0] : *randomLiving();
+            lead.damage += tune::kBulletWound * hits;
+            n.push_back({lead.name + (hits >= 3 ? " was shot down in the fight." : " was shot in the fight."), true});
+            if (lead.illness == Illness::None && hits >= 2) lead.illness = Illness::BrokenLeg;
+        }
+        if (wagonHits > 0) {
+            double food = std::min(sup.food, tune::kWagonHitFood * wagonHits);
+            sup.food -= food;
+            n.push_back({"Bullets tore through the wagon: " + std::to_string(int(food)) + " lb of food ruined.", true});
+            if (sup.oxen > 0 && r() < 0.10 * wagonHits) {
+                --sup.oxen;
+                n.push_back({"A stray bullet killed one of your oxen.", true});
+            }
+        }
+    };
+    if (left == 0) {
+        n.push_back({e == Encounter::Bandits ? "You drove the bandits off!" : "You killed the wolves!", false});
+        if (e == Encounter::Wolves) {
+            sup.food += 20;
+            n.push_back({"You skin the wolves and find a little meat: 20 pounds of food.", false});
+        }
+        aftermath();
+        return n;
+    }
+    if (e == Encounter::Bandits) {
+        double cash = std::floor(sup.cash * std::min(0.6, tune::kBanditCash * left));
+        double food = std::floor(sup.food * std::min(0.6, tune::kBanditFood * left));
+        int bul = int(sup.bullets * std::min(0.6, tune::kBanditBullets * left));
+        sup.cash -= cash;
+        sup.food -= food;
+        sup.bullets -= bul;
+        n.push_back({std::to_string(left) + " of the bandits got to the wagon. They took $" + std::to_string(int(cash)) +
+                         ", " + std::to_string(int(food)) + " lb of food and " + std::to_string(bul) + " bullets.", true});
+        if (left >= 2 && r() < 0.5) {
+            if (Member *m = randomLiving()) {
+                m->damage += 20;
+                n.push_back({m->name + " was wounded in the fight.", true});
+            }
+        }
+    } else {
+        for (int i = 0; i < left; ++i) {
+            if (Member *m = randomLiving()) {
+                m->damage += tune::kWolfBite;
+                n.push_back({m->name + " was bitten by a wolf.", true});
+            }
+        }
+        double food = std::min(sup.food, 15.0 * left);
+        sup.food -= food;
+        n.push_back({"The wolves tore into your food: " + std::to_string(int(food)) + " lb lost.", true});
+    }
+    aftermath();
+    return n;
+}
+
+int Trail::simulatedKills()
+{
+    // A middling shot: roughly 60% of the pack, and only if there are bullets.
+    if (sup.bullets < 10) return 0;
+    int k = 0;
+    for (int i = 0; i < encounterSize_; ++i)
+        if (r() < 0.6) ++k;
+    return k;
+}
+
+int Trail::burialMile(const std::string &cause) const
+{
+    return int(miles) + (cause == "drowning" ? 1 : 0);
+}
+
+std::vector<Grave> Trail::takePassedGraves()
+{
+    std::vector<Grave> out;
+    out.swap(passed_);
+    return out;
+}
+
 // --- hunting ---------------------------------------------------------------
 
 std::vector<Note> Trail::huntDay(double pounds, int bulletsUsed)
 {
     std::vector<Note> n;
+    abandonEncounter();
     sup.bullets = std::max(0, sup.bullets - bulletsUsed);
     // The wagon can't carry more than 200 lb of meat home.
     double carried = std::min(pounds, 200.0);
@@ -523,6 +651,8 @@ std::vector<Note> Trail::cross(Method m)
 
 // --- score -------------------------------------------------------------------
 
+double Trail::scoreMultiplier() const { return tune::kScoreMultiplier[int(profession)]; }
+
 int Trail::score() const
 {
     int pts = 0;
@@ -531,8 +661,7 @@ int Trail::score() const
     pts += 50;   // the wagon
     pts += sup.oxen * 4 + (sup.wheels + sup.axles + sup.tongues) * 2 + sup.clothing * 2;
     pts += sup.bullets / 50 + int(sup.food / 25) + int(sup.cash / 5);
-    int mult = profession == Profession::Banker ? 1 : profession == Profession::Carpenter ? 2 : 3;
-    return pts * mult;
+    return int(pts * scoreMultiplier());
 }
 
 } // namespace trail

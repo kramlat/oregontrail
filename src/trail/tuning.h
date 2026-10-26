@@ -8,8 +8,13 @@
 
 namespace trail::tune {
 
-// Starting cash.
-inline constexpr double kBanker = 1600, kCarpenter = 800, kFarmer = 400;
+// Starting cash and score multiplier, by Profession (enum order). The three 1985 jobs keep
+// their figures; the others are the Deluxe/Windows jobs, whose cash we found documented.
+// Their multipliers are ours: we follow the 1985 rule that less money earns a higher
+// multiplier, scaled by starting cash (we have no source for the originals).
+//                                       Banker Doctor Merchant Blacksmith Carpenter Saddlemaker Farmer Teacher
+inline constexpr double kStartCash[8] = {1600,  1200,  1200,     800,       800,      800,        400,   400};
+inline constexpr double kScoreMultiplier[8] = {1, 1.5,  1.5,       2,         2,        2,          3,     3};
 
 // Store prices at Independence (forts charge more, see Trail::price).
 inline constexpr double kYoke = 40, kFoodLb = 0.20, kClothes = 10, kBullets = 2, kPart = 10;
@@ -39,6 +44,12 @@ inline constexpr double kDeathChance[9] = {0, 0.05, 0.03, 0.018, 0.03, 0.012, 0.
 
 // Events.
 inline constexpr double kEventChance = 0.16;
+
+// Fights (bandits and wolves). Weights are relative to the other events.
+inline constexpr int kBanditWeight = 4, kWolfWeight = 4;
+inline constexpr double kBanditCash = 0.12, kBanditFood = 0.08, kBanditBullets = 0.15;   // per surviving bandit
+inline constexpr double kWolfBite = 14;
+inline constexpr double kBulletWound = 22, kWagonHitFood = 8;   // return fire
 
 // Score.
 inline constexpr int kScoreHealth[4] = {500, 400, 300, 200};

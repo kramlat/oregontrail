@@ -37,7 +37,8 @@ struct Script : Frontend {
     std::ostringstream out;
     std::function<std::string(const std::string &)> answer;
     double shotSeconds = 0.5;
-    bool correctWord = true;
+    bool miss = false;
+    int shots = 0;
 
     void text(const std::string &s) override { out << s; }
     std::string ask(const std::string &p) override
@@ -45,10 +46,10 @@ struct Script : Frontend {
         out << p << "? ";
         return answer(p);
     }
-    Shot shoot(const std::string &w) override
+    double shoot(Target) override
     {
-        out << "TYPE " << w << "\n";
-        return {correctWord ? w : "xxxx", shotSeconds};
+        ++shots;
+        return miss ? 9 : shotSeconds;
     }
 };
 
@@ -126,10 +127,10 @@ void testFortNegativeSpend()
     }
 }
 
-// The wrong shooting word is always worst-case (B1=9) and a miss at that.
+// A missed shot is always worst-case (B1=9) and a miss at that.
 void testWrongWord()
 {
-    Script s; s.answer = stockAnswer; s.correctWord = false;
+    Script s; s.answer = stockAnswer; s.miss = true;
     s.answer = [&](const std::string &p) -> std::string {
         if (p.find("HUNT") != std::string::npos) return "1";
         return stockAnswer(p);
@@ -137,6 +138,7 @@ void testWrongWord()
     FixedRng r(0.5);
     Game(s, r).play();
     CHECK(s.out.str().find("YOU MISSED---AND YOUR DINNER GOT AWAY") != std::string::npos);
+    CHECK(s.shots > 0);
 }
 
 // Whatever the dice and the player do, a game must end, and never crash.

@@ -1,9 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "trailgame.h"
+#include "graveyard.h"
+#include "shootview.h"
 
 #include <QApplication>
 #include <QDialog>
 #include <QDialogButtonBox>
+#include <QElapsedTimer>
 #include <QFontDatabase>
 #include <QFormLayout>
 #include <QGridLayout>
@@ -22,40 +25,6 @@
 #include <QVBoxLayout>
 
 using namespace trail;
-
-// ---------------------------------------------------------------- PixelView
-
-PixelView::PixelView(QWidget *parent) : QWidget(parent), image(art::newCanvas())
-{
-    setMinimumSize(art::W * 2, art::H * 2);
-    setMouseTracking(true);
-    setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
-}
-
-QRect PixelView::target() const
-{
-    // Fit the canvas, keeping the aspect ratio (nearest-neighbour keeps it crisp).
-    double s = std::min(double(width()) / art::W, double(height()) / art::H);
-    int w = int(art::W * s), h = int(art::H * s);
-    return QRect((width() - w) / 2, (height() - h) / 2, w, h);
-}
-
-QPoint PixelView::toCanvas(QPoint p) const
-{
-    QRect r = target();
-    return QPoint((p.x() - r.x()) * art::W / std::max(1, r.width()), (p.y() - r.y()) * art::H / std::max(1, r.height()));
-}
-
-void PixelView::paintEvent(QPaintEvent *)
-{
-    QPainter p(this);
-    p.fillRect(rect(), Qt::black);
-    p.setRenderHint(QPainter::SmoothPixmapTransform, false);
-    p.drawImage(target(), image);
-}
-
-void PixelView::mouseMoveEvent(QMouseEvent *e) { emit moved(toCanvas(e->pos())); }
-void PixelView::mousePressEvent(QMouseEvent *e) { emit clicked(toCanvas(e->pos())); }
 
 // ---------------------------------------------------------------- dialogs
 
@@ -168,7 +137,7 @@ void showPicture(QWidget *parent, const QImage &img, const QString &title, const
 
 TrailGame::TrailGame(QWidget *parent) : QWidget(parent)
 {
-    view_ = new PixelView;
+    view_ = new ShootView;
     info_ = new QLabel;
     info_->setFont(monoFont(10));
     info_->setTextFormat(Qt::PlainText);
@@ -201,35 +170,23 @@ TrailGame::TrailGame(QWidget *parent) : QWidget(parent)
     lay->addLayout(row);
     setFocusPolicy(Qt::StrongFocus);
 
-    connect(view_, &PixelView::moved, this, [this](QPoint p) { aim_ = p; });
-    connect(view_, &PixelView::clicked, this, [this](QPoint p) {
-        if (mode_ != Mode::Hunt || huntBullets_ <= 0) return;
-        aim_ = p;
-        --huntBullets_;
-        ++huntShots_;
-        if (huntBullets_ == 0) huntEnd_ = std::min(huntEnd_, huntTicks_ + 15);
-        for (auto &b : beasts_) {
-            if (!b.alive) continue;
-            art::Sprite s = art::animalSize(b.kind);
-            QRect r(int(b.x) - 3, int(b.y) - 3, s.w + 6, s.h + 6);
-            if (r.contains(p)) {
-                b.alive = false;
-                meat_ += b.kind == art::Animal::Rabbit ? 2 : b.kind == art::Animal::Deer ? 60 + int(rng_.next() * 40) : 350;
-                break;
-            }
-        }
-    });
+    connect(view_, &ShootView::finished, this, &TrailGame::endShooting);
 
     timer_ = new QTimer(this);
     timer_->setInterval(90);
     connect(timer_, &QTimer::timeout, this, &TrailGame::tick);
+
 }
 
 TrailGame::~TrailGame() = default;
 
+void TrailGame::setDayTickMs(int ms) { timer_->setInterval(ms); }
+
 bool TrailGame::setup()
 {
-    const QStringList profs = {"Banker from Boston ($1600)", "Carpenter from Ohio ($800)", "Farmer from Illinois ($400)"};
+    const QStringList profs = {"Banker from Boston ($1600)", "Doctor ($1200)", "Merchant ($1200)", "Blacksmith ($800)",
+                               "Carpenter from Ohio ($800)", "Saddlemaker ($800)", "Farmer from Illinois ($400)",
+                               "Teacher ($400)"};
     bool ok = false;
     QString p = QInputDialog::getItem(this, "The Oregon Trail", "Many kinds of people made the trip to Oregon.\nYou may:",
                                       profs, 0, false, &ok);
@@ -267,6 +224,13 @@ bool TrailGame::setup()
 
     t_ = std::make_unique<Trail>(rng_, prof, 3 + months.indexOf(m), names);
 
+    // Tombstones from earlier games stand along the trail (this game's own are added as they happen).
+    yard_.load();
+    std::vector<trail::Grave> ahead;
+    for (const Tombstone &gr : yard_.graves())
+        ahead.push_back({gr.name.toStdString(), gr.cause.toStdString(), gr.date.toStdString(), gr.epitaph.toStdString(), gr.mile});
+    t_->setGraves(std::move(ahead));
+
     for (;;) {
         StoreDialog sd(*t_, "Matt's General Store, Independence", this);
         if (sd.exec() == QDialog::Accepted) sd.apply();
@@ -290,6 +254,7 @@ void TrailGame::newGame()
     going_ = false;
     over_ = false;
     recent_.clear();
+    leaderGrave_ = QImage();
     scroll_ = 0;
     if (!setup()) {
         if (!t_) return;
@@ -308,15 +273,51 @@ void TrailGame::absorb(const std::vector<Note> &notes)
     log_->setText(recent_.join("\n"));
 }
 
+// The Apple II asked the player what to put on the stone; so do we.
+QImage TrailGame::grave(const QString &name, const QString &cause)
+{
+    QInputDialog ask(this);
+    ask.setWindowTitle("Tombstone");
+    ask.setInputMode(QInputDialog::TextInput);
+    ask.setLabelText(QString("%1 has died of %2.\n\nWould you like to carve something on the tombstone?\n"
+                             "What do you want it to say? (leave blank for nothing)").arg(name, cause));
+    if (auto *edit = ask.findChild<QLineEdit *>()) edit->setMaxLength(40);
+    QString epitaph;
+    if (ask.exec() == QDialog::Accepted) epitaph = ask.textValue().left(40);
+    const QString date = QString::fromStdString(t_->dateString());
+    QImage img = art::newCanvas();
+    art::tombstone(img, name, cause, date, epitaph);
+    // Keep it: later games will find this stone on the trail, where it happened.
+    yard_.add({name, cause, date, epitaph, t_->burialMile(cause.toStdString())});
+    yard_.save();
+    return img;
+}
+
+// An event from the engine: the wagon has passed a tombstone left by an earlier game.
+void TrailGame::visitGraves()
+{
+    for (const auto &gr : t_->takePassedGraves()) {
+        going_ = false;                                   // stop and look, as for any event
+        const QString epitaph = QString::fromStdString(gr.epitaph);
+        QImage img = art::newCanvas();
+        art::tombstone(img, QString::fromStdString(gr.name), QString::fromStdString(gr.cause),
+                       QString::fromStdString(gr.date), epitaph);
+        QString text = QString("A tombstone stands beside the trail, near mile %1.").arg(gr.mile);
+        if (!epitaph.isEmpty()) text += QString("\n\nIt reads: \"%1\"").arg(epitaph);
+        showPicture(this, img, "A grave beside the trail", text);
+    }
+}
+
 void TrailGame::deaths(const std::vector<Note> &notes)
 {
     static const QRegularExpression re("^(.*) has died of (.*)\\.$");
     for (auto &n : notes) {
         auto m = re.match(QString::fromStdString(n.text));
         if (!m.hasMatch()) continue;
-        QImage img = art::newCanvas();
-        art::tombstone(img, m.captured(1), m.captured(2), QString::fromStdString(t_->dateString()));
         going_ = false;
+        QImage img = grave(m.captured(1), m.captured(2));
+        if (!t_->party[0].alive && leaderGrave_.isNull() && m.captured(1) == QString::fromStdString(t_->party[0].name))
+            leaderGrave_ = img;
         showPicture(this, img, "Sad news", QString("%1 has died of %2.").arg(m.captured(1), m.captured(2)));
     }
 }
@@ -349,10 +350,7 @@ void TrailGame::refresh()
 
 void TrailGame::tick()
 {
-    if (mode_ == Mode::Hunt) {
-        tickHunt();
-        return;
-    }
+    if (mode_ == Mode::Shoot) return;   // the ShootView drives hunts and fights
     if (mode_ != Mode::Travel || !t_) return;
     ++frame_;
     if (going_) {
@@ -375,9 +373,15 @@ void TrailGame::stepDay()
     auto notes = t_->travelDay();
     absorb(notes);
     deaths(notes);
+    visitGraves();
     refresh();
     if (t_->wiped) { defeat(); return; }
     if (t_->won) { victory(); return; }
+    if (t_->pendingEncounter() != trail::Encounter::None) {
+        going_ = false;
+        startFight();
+        return;
+    }
     if (!notes.empty() && notes.front().bad && !t_->atLandmark()) going_ = false;   // trouble: stop and look
     if (t_->atLandmark()) {
         going_ = false;
@@ -514,10 +518,9 @@ void TrailGame::victory()
     int alive = t_->livingCount();
     showPicture(this, img, "Oregon City",
                 QString("Congratulations! You have made it to Oregon!\n\nArrived: %1\nSurvivors: %2 of 5\n"
-                        "Score (%3 multiplier): %4\n\nChoose Game > New Game to play again.")
+                        "Score (x%3 for a %5): %4\n\nChoose Game > New Game to play again.")
                     .arg(QString::fromStdString(t_->dateString())).arg(alive)
-                    .arg(t_->profession == Profession::Banker ? "x1" : t_->profession == Profession::Carpenter ? "x2" : "x3")
-                    .arg(t_->score()));
+                    .arg(t_->scoreMultiplier()).arg(t_->score()).arg(name(t_->profession)));
 }
 
 void TrailGame::defeat()
@@ -525,9 +528,9 @@ void TrailGame::defeat()
     over_ = true;
     going_ = false;
     refresh();
-    QImage img = art::newCanvas();
-    art::tombstone(img, QString::fromStdString(t_->party[0].name), "the hardships of the trail",
-                   QString::fromStdString(t_->dateString()));
+    // The leader's own tombstone was shown when they died; if the party was lost another
+    // way (the winter snows), the leader gets one now.
+    QImage img = leaderGrave_.isNull() ? grave(QString::fromStdString(t_->party[0].name), "exposure") : leaderGrave_;
     view_->image = img;
     view_->update();
     showPicture(this, img, "The end of the trail",
@@ -543,82 +546,83 @@ void TrailGame::startHunt()
         return;
     }
     going_ = false;
-    mode_ = Mode::Hunt;
-    beasts_.clear();
-    huntBullets_ = std::min(t_->sup.bullets, 20);
-    huntShots_ = 0;
-    huntTicks_ = 0;
-    huntEnd_ = 500;
-    meat_ = 0;
-    for (int i = 0; i < 3; ++i) spawnBeast();
-    refresh();
-    setFocus();
-}
-
-void TrailGame::spawnBeast()
-{
-    double k = rng_.next();
-    art::Animal a = k < 0.5 ? art::Animal::Rabbit : k < 0.85 ? art::Animal::Deer : art::Animal::Bison;
-    double speed = a == art::Animal::Rabbit ? 3.2 : a == art::Animal::Deer ? 2.4 : 1.1;
-    bool fromLeft = rng_.next() < 0.5;
-    art::Sprite s = art::animalSize(a);
-    Beast b{a, double(fromLeft ? -s.w : art::W), 118 + rng_.next() * 50, fromLeft ? speed : -speed};
-    beasts_.push_back(b);
-}
-
-void TrailGame::tickHunt()
-{
-    ++huntTicks_;
-    ++frame_;
-    for (auto &b : beasts_) {
-        b.x += b.vx;
-        if (b.vx > 0 ? b.x > art::W + 20 : b.x < -60) b.alive = false;
-    }
-    if (huntTicks_ % 25 == 0) spawnBeast();
-    drawHunt();
-    // 45 seconds, or a moment after the last bullet.
-    if (huntTicks_ >= huntEnd_)
-        endHunt();
-}
-
-void TrailGame::drawHunt()
-{
-    QImage &img = view_->image;
-    art::huntBackdrop(img, terrainAt(int(t_->miles)));
-    QPainter p(&img);
-    for (auto &b : beasts_)
-        if (b.alive) art::drawAnimal(p, b.kind, int(b.x), int(b.y), b.vx > 0, frame_ / 2);
-    art::drawCrosshair(p, aim_.x(), aim_.y());
-    p.setPen(art::White);
-    QFont f("monospace");
-    f.setPixelSize(9);
-    p.setFont(f);
-    p.fillRect(0, 0, art::W, 12, art::Black);
-    p.drawText(4, 9, QString("BULLETS %1   MEAT %2 LB   TIME %3   [Enter] done")
-                         .arg(huntBullets_).arg(int(meat_)).arg(std::max(0, (huntEnd_ - huntTicks_) * 90 / 1000)));
-    view_->update();
-}
-
-void TrailGame::endHunt()
-{
-    mode_ = Mode::Travel;
-    int used = huntShots_;
-    auto notes = t_->huntDay(meat_, used);
-    if (meat_ > 200) notes.insert(notes.begin(), {"That's more than the wagon can carry; you leave the rest behind.", false});
-    absorb(notes);
-    deaths(notes);
-    refresh();
-    if (t_->wiped) defeat();
+    QMessageBox::information(this, "Hunting",
+                             "Game animals are about: rabbits, deer and bison. They bolt when you get close.\n\n"
+                             "Walk with W A S D, turn with the mouse (or Q/E, arrows), fire with a click or Space.\n"
+                             "Bullets take time to arrive, so lead what's running. Trees and bushes stop bullets.\n"
+                             "Press Enter when you're done; the wagon can carry 200 lb of meat home.");
+    beginShooting(std::make_unique<fight::Field>(fight::Field::HuntTag{}, std::min(t_->sup.bullets, 20), rng_));
 }
 
 // Keyboard: space toggles travel; Enter ends a hunt.
 void TrailGame::keyPressEvent(QKeyEvent *e)
 {
+    if (mode_ == Mode::Shoot) {
+        if (!view_->handleKey(e, true)) QWidget::keyPressEvent(e);
+        return;
+    }
     if (e->key() == Qt::Key_Space && mode_ == Mode::Travel)
         toggleGo();
-    else if ((e->key() == Qt::Key_Return || e->key() == Qt::Key_Enter) && mode_ == Mode::Hunt)
-        endHunt();
     else
         QWidget::keyPressEvent(e);
 }
 
+void TrailGame::keyReleaseEvent(QKeyEvent *e)
+{
+    if (mode_ == Mode::Shoot && view_->handleKey(e, false)) return;
+    QWidget::keyReleaseEvent(e);
+}
+
+// ---------------------------------------------------------------- shooting (fights and hunts)
+
+void TrailGame::beginShooting(std::unique_ptr<fight::Field> field)
+{
+    mode_ = Mode::Shoot;
+    view_->begin(std::move(field));
+    refresh();
+    setFocus();
+}
+
+void TrailGame::startFight()
+{
+    const bool bandits = t_->pendingEncounter() == Encounter::Bandits;
+    const int total = t_->encounterSize();
+    if (t_->sup.bullets < 5) {
+        QMessageBox::warning(this, bandits ? "Bandits!" : "Wolves!",
+                             QString(bandits ? "Bandits attack, " : "Wolves attack, ") +
+                                 "and you have almost no bullets to fight back with!");
+        auto notes = t_->resolveEncounter(0, 0);
+        absorb(notes);
+        deaths(notes);
+        refresh();
+        if (t_->wiped) defeat();
+        return;
+    }
+    QMessageBox::information(this, bandits ? "Bandits!" : "Wolves!",
+                             QString(bandits ? "%1 bandits are closing in on the wagon from every side!"
+                                             : "A pack of %1 wolves is closing in from every side!").arg(total) +
+                                 "\n\nWalk with W A S D, turn with the mouse (or Q/E, arrows), fire with a click or Space.\n"
+                                 "Bullets take time to arrive, so lead fast targets. Trees and bushes stop bullets.\n"
+                                 "Arrows at the screen edge point to enemies you can't see. Don't let them reach the wagon.\n" +
+                                 QString(bandits ? "The bandits have guns and shoot back: keep moving, three hits and you're down." : ""));
+    beginShooting(std::make_unique<fight::Field>(bandits ? fight::Kind::Bandit : fight::Kind::Wolf, total,
+                                                 std::min(t_->sup.bullets, 25), rng_));
+}
+
+void TrailGame::endShooting()
+{
+    auto field = view_->take();
+    mode_ = Mode::Travel;
+    std::vector<Note> notes;
+    if (field->hunting()) {
+        notes = t_->huntDay(field->meat, field->shots);
+        if (field->meat > 200)
+            notes.insert(notes.begin(), {"That's more than the wagon can carry; you leave the rest behind.", false});
+    } else {
+        notes = t_->resolveEncounter(field->killed, field->shots, field->hits, field->wagonHits);
+    }
+    absorb(notes);
+    deaths(notes);
+    refresh();
+    if (t_->wiped) defeat();
+}

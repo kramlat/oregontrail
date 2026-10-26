@@ -255,19 +255,7 @@ void landmarkScene(QImage &img, const trail::Landmark &l, int frame)
     p.restore();
 }
 
-void huntBackdrop(QImage &img, Terrain t)
-{
-    Painter p(img);
-    sky(p, Weather::Warm);
-    cloud(p, 30, 22);
-    cloud(p, 170, 34);
-    ground(p, t == Terrain::Rockies ? Terrain::Hills : t);
-    mountains(p, 0, 160, kHorizon, 26, false, Violet);
-    tiled(0, 54, [&](int x) { pine(p, x + 6, kHorizon + 10, 20); });
-    tiled(0, 31, [&](int x) { rect(p, x, 150 + (x % 20), 1, 3, Black); });
-}
-
-void tombstone(QImage &img, const QString &name, const QString &cause, const QString &date)
+void tombstone(QImage &img, const QString &name, const QString &cause, const QString &date, const QString &epitaph)
 {
     Painter p(img);
     rect(p, 0, 0, W, H, Black);
@@ -282,14 +270,20 @@ void tombstone(QImage &img, const QString &name, const QString &cause, const QSt
     f.setPixelSize(10);
     f.setBold(true);
     p.setFont(f);
-    p.drawText(QRect(90, 40, 100, 14), Qt::AlignCenter, "HERE LIES");
-    p.drawText(QRect(90, 62, 100, 14), Qt::AlignCenter, name.toUpper());
+    p.drawText(QRect(90, 36, 100, 14), Qt::AlignCenter, "HERE LIES");
+    p.drawText(QRect(90, 54, 100, 14), Qt::AlignCenter, name.toUpper());
     f.setBold(false);
     f.setPixelSize(8);
+    f.setItalic(true);
     p.setFont(f);
-    p.drawText(QRect(90, 84, 100, 12), Qt::AlignCenter, "Died of " + cause);
-    p.drawText(QRect(90, 98, 100, 12), Qt::AlignCenter, date);
-    // cross
+    // What the family wrote on it (up to two lines).
+    if (!epitaph.trimmed().isEmpty())
+        p.drawText(QRect(94, 70, 92, 24), Qt::AlignHCenter | Qt::AlignTop | Qt::TextWordWrap, epitaph.trimmed());
+    f.setItalic(false);
+    p.setFont(f);
+    p.drawText(QRect(90, 100, 100, 12), Qt::AlignCenter, "Died of " + cause);
+    p.drawText(QRect(90, 112, 100, 12), Qt::AlignCenter, date);
+    // crosses for the graves already behind you
     rect(p, 20, 90, 4, 50, Orange);
     rect(p, 12, 100, 20, 4, Orange);
     rect(p, 240, 96, 4, 44, Orange);
@@ -307,6 +301,8 @@ Sprite animalSize(Animal a)
     switch (a) {
     case Animal::Rabbit: return {10, 7};
     case Animal::Deer: return {22, 18};
+    case Animal::Wolf: return {20, 11};
+    case Animal::Bandit: return {10, 20};
     default: return {32, 20};
     }
 }
@@ -342,6 +338,30 @@ void drawAnimal(QPainter &p, Animal a, int x, int y, bool right, int frame)
         rect(p, 9 - step * 3, 12, 2, 6, Violet);
         rect(p, 13 + step * 2, 12, 2, 6, Violet);
         break;
+    case Animal::Wolf:
+        rect(p, 3, 3, 12, 5, Black);          // body
+        rect(p, 14, 1, 5, 5, Black);          // head
+        rect(p, 18, 3, 2, 2, Black);          // snout
+        rect(p, 14, 0, 1, 2, Black);          // ears
+        rect(p, 17, 0, 1, 2, Black);
+        rect(p, 17, 2, 1, 1, Orange);         // eye
+        rect(p, 18, 5, 2, 1, White);          // teeth
+        rect(p, 0, 2, 4, 2, Black);           // tail
+        rect(p, 4 + step * 3, 8, 2, 3, Black);
+        rect(p, 8 - step * 3, 8, 2, 3, Black);
+        rect(p, 12 + step * 2, 8, 2, 3, Black);
+        break;
+    case Animal::Bandit:
+        rect(p, 1, 0, 8, 2, Black);           // hat brim
+        rect(p, 3, -2, 4, 2, Black);          // crown
+        rect(p, 3, 2, 4, 3, Orange);          // face
+        rect(p, 3, 4, 4, 1, Black);           // bandana
+        rect(p, 2, 5, 6, 8, Black);           // coat
+        rect(p, 8, 7, 4, 1, Black);           // gun arm
+        rect(p, 11, 6, 1, 2, White);          // gun
+        rect(p, 2 + step * 2, 13, 2, 7, Black);
+        rect(p, 6 - step * 2, 13, 2, 7, Black);
+        break;
     default:   // bison
         rect(p, 6, 3, 20, 11, Violet);
         rect(p, 2, 7, 10, 9, Violet);
@@ -356,15 +376,6 @@ void drawAnimal(QPainter &p, Animal a, int x, int y, bool right, int frame)
     p.restore();
 }
 
-void drawCrosshair(QPainter &p, int x, int y)
-{
-    p.setPen(White);
-    p.drawLine(x - 7, y, x - 2, y);
-    p.drawLine(x + 2, y, x + 7, y);
-    p.drawLine(x, y - 7, x, y - 2);
-    p.drawLine(x, y + 2, x, y + 7);
-    p.setPen(Black);
-    p.drawPoint(x, y);
-}
+void drawWagon(QPainter &p, int x, int y, int frame) { wagon(p, x, y, frame); }
 
 } // namespace art

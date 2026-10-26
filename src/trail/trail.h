@@ -19,7 +19,9 @@ namespace trail {
 
 using oregon::Rng;
 
-enum class Profession { Banker, Carpenter, Farmer };
+// In menu order, richest first. Only the money and the score multiplier differ (1985 rules).
+enum class Profession { Banker, Doctor, Merchant, Blacksmith, Carpenter, Saddlemaker, Farmer, Teacher };
+constexpr int kProfessions = 8;
 enum class Pace { Steady, Strenuous, Grueling };
 enum class Rations { Filling, Meager, BareBones };
 enum class Illness { None, Cholera, Dysentery, Measles, Typhoid, Exhaustion, Fever, Snakebite, BrokenLeg };
@@ -28,6 +30,13 @@ enum class Terrain { Plains, Hills, Rockies, Desert, BlueMountains, Cascades };
 enum class Kind { Start, Landmark, Fort, River, End };
 enum class Weather { Hot, Warm, Cool, Cold, Rain, Snow };
 enum class Method { Ford, Caulk, Ferry, Wait };
+enum class Encounter { None, Bandits, Wolves };
+
+// A tombstone left by someone who died in an earlier game (kept by the front end's save file).
+struct Grave {
+    std::string name, cause, date, epitaph;
+    int mile = 0;
+};
 
 struct Landmark {
     const char *name;
@@ -94,6 +103,8 @@ public:
     const Landmark &here() const;             // valid when atLandmark()
     void leave() { atLandmark_ = false; }
 
+    double speed() const;                     // miles the wagon would cover today (for animation)
+
     // --- Rivers ---
     const River &river() const { return river_; }
     std::vector<Note> cross(Method);
@@ -102,6 +113,23 @@ public:
     // Costs the bullets fired and a day of the party's time.
     std::vector<Note> huntDay(double pounds, int bulletsUsed);
     double simulatedHuntPounds();             // for bots/tests: no UI
+
+    // --- Fights: bandits and wolves. The event only *starts* the encounter; the UI
+    // plays the shooting minigame and reports how it went. Any other action while
+    // one is pending counts as not fighting back.
+    Encounter pendingEncounter() const { return encounter_; }
+    int encounterSize() const { return encounterSize_; }
+    // `hits`: bullets that hit the shooter; `wagonHits`: bullets that hit the wagon.
+    std::vector<Note> resolveEncounter(int killed, int bulletsUsed, int hits = 0, int wagonHits = 0);
+    int simulatedKills();                     // for bots/tests: a middling shot
+
+    // --- Graves from earlier games: passing one is a trail event ---
+    // Where a death today is buried, in trail miles. Someone who drowned in a river is
+    // buried on the far bank, so later wagons meet the stone after they've crossed.
+    int burialMile(const std::string &cause) const;
+    void setGraves(std::vector<Grave> graves) { graves_ = std::move(graves); }
+    // Graves passed on the latest day's travel (each is reported once, in the notes too).
+    std::vector<Grave> takePassedGraves();
 
     // --- Settings ---
     Pace pace = Pace::Steady;
@@ -121,6 +149,7 @@ public:
     int dayOfMonth() const;
     int month() const;                        // 1..12 (1848)
     std::string dateString() const;
+    double scoreMultiplier() const;
     int score() const;
 
 private:
@@ -128,6 +157,10 @@ private:
     int next_ = 1;
     bool atLandmark_ = false;
     River river_;
+    std::vector<Grave> graves_, passed_;
+    Encounter encounter_ = Encounter::None;
+    int encounterSize_ = 0;
+    void abandonEncounter();
     int deadline_ = 0;   // day number of Jan 1 1849: arrive before it or perish
 
     double r() { return rng_.next(); }
@@ -140,7 +173,6 @@ private:
     Member *randomLiving();
     bool winter() const;
     bool mountainous() const;
-    double speed() const;
     void spendFood(std::vector<Note> &n);
     void passDay(bool resting, std::vector<Note> &n);   // food, health, the date
 };

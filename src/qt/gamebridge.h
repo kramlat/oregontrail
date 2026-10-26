@@ -3,7 +3,6 @@
 
 #include "oregon.h"
 
-#include <QElapsedTimer>
 #include <QMutex>
 #include <QObject>
 #include <QString>
@@ -11,7 +10,8 @@
 
 // Connects the blocking engine (worker thread) to the GUI thread.
 // The worker calls the Frontend methods; they post signals to the window and
-// sleep until submit() delivers the player's reply.
+// sleep until the GUI delivers the player's reply (typed text, or the result of a
+// shooting round).
 class GameBridge : public QObject, public oregon::Frontend {
     Q_OBJECT
 public:
@@ -22,26 +22,26 @@ public:
     // Worker thread.
     void text(const std::string &s) override;
     std::string ask(const std::string &prompt) override;
-    Shot shoot(const std::string &word) override;
+    double shoot(Target target) override;
 
 public slots:
     // GUI thread.
-    void promptShown();               // the input box just became usable
     void submit(const QString &reply);
+    void submitShot(double seconds);
     void cancel();
 
 signals:
     void textOut(const QString &s);
     void inputRequested();
+    void shotRequested(int target);          // an oregon::Frontend::Target
     void gameEnded(bool arrived);
 
 private:
-    QString wait(double *seconds = nullptr);
+    void wait();
 
     QMutex mutex_;
     QWaitCondition reply_;
     bool have_ = false, cancelled_ = false;
     QString answer_;
     double seconds_ = 0;
-    QElapsedTimer clock_;             // GUI thread only
 };

@@ -322,7 +322,7 @@ void Game::fort()
 void Game::hunt()
 {
     M -= 45;
-    double b1 = shoot();
+    double b1 = shoot(Frontend::Target::Game);
     if (b1 <= 1) {
         fe_.line("RIGHT BETWEEN THE EYES---YOU GOT A BIG ONE!!!!");
         fe_.line("FULL BELLIES TONIGHT!");
@@ -398,7 +398,7 @@ void Game::riders()
             M += 20; M1 -= 15; B -= 150; A -= 40;
             break;
         case 2:
-            B1 = shoot();
+            B1 = shoot(Frontend::Target::Riders);
             B -= B1 * 40 + 80;
             shot = true;
             break;
@@ -410,7 +410,7 @@ void Game::riders()
             B -= 150; M1 -= 15;
             break;
         case 4:
-            B1 = shoot();
+            B1 = shoot(Frontend::Target::Riders);
             B -= B1 * 30 + 80;
             M -= 25;
             shot = true;
@@ -498,7 +498,7 @@ void Game::event()
         break;
     case 8:
         fe_.line("BANDITS ATTACK");
-        B1 = shoot();
+        B1 = shoot(Frontend::Target::Bandits);
         B -= 20 * B1;
         if (B < 0) {
             fe_.line("YOU RAN OUT OF BULLETS---THEY GET LOTS OF CASH");
@@ -542,7 +542,7 @@ void Game::event()
         break;
     case 13: {
         fe_.line("WILD ANIMALS ATTACK!");
-        double b1 = shoot();
+        double b1 = shoot(Frontend::Target::Wolves);
         if (B <= 39) {
             fe_.line("YOU WERE TOO LOW ON BULLETS--");
             fe_.line("THE WOLVES OVERPOWERED YOU");
@@ -649,18 +649,15 @@ void Game::illness()
 }
 
 // 6140-6280
-double Game::shoot()
+double Game::shoot(Frontend::Target target)
 {
-    static const char *const words[] = {"BANG", "BLAM", "POW", "WHAM"};
-    std::string word = words[int(rng_.next() * 4)];
-    Frontend::Shot s = fe_.shoot(word);
-    fe_.line();
-    double b1 = s.seconds + opt_.shootingSlack;
-    b1 -= (D9 - 1);
+    rng_.next();                       // the original picked the shooting word here; keep the dice in step
+    double seconds = fe_.shoot(target);
+    double b1 = seconds - (D9 - 1);
     if (b1 <= 0)
         b1 = 0;
-    if (upper(s.typed) != word)
-        b1 = 9;
+    if (seconds >= 9)
+        b1 = 9;                        // a miss is always the worst shot
     return b1;
 }
 

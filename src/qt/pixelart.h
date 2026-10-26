@@ -25,15 +25,16 @@ QImage newCanvas();
 void travelScene(QImage &img, trail::Terrain t, trail::Weather w, double scroll, int frame);
 // Stationary scene at a landmark / fort / river / town.
 void landmarkScene(QImage &img, const trail::Landmark &l, int frame);
-// Open country for the hunting minigame (no wagon).
-void huntBackdrop(QImage &img, trail::Terrain t);
-void tombstone(QImage &img, const QString &name, const QString &cause, const QString &date);
+// `epitaph` is whatever the player chose to have carved (may be empty).
+void tombstone(QImage &img, const QString &name, const QString &cause, const QString &date,
+               const QString &epitaph = {});
 void oregonCity(QImage &img);
 
-enum class Animal { Rabbit, Deer, Bison };
+enum class Animal { Rabbit, Deer, Bison, Wolf, Bandit };
 struct Sprite { int w, h; };
 Sprite animalSize(Animal a);
 void drawAnimal(QPainter &p, Animal a, int x, int y, bool facingRight, int frame);
-void drawCrosshair(QPainter &p, int x, int y);
+// The covered wagon alone (46 px wide, 30 px tall above y, wheels just below).
+void drawWagon(QPainter &p, int x, int y, int frame);
 
 } // namespace art

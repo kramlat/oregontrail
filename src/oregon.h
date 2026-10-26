@@ -29,12 +29,12 @@ public:
     // INPUT: show the prompt, return the player's raw reply.
     virtual std::string ask(const std::string &prompt) = 0;
 
-    // The shooting minigame: show "TYPE <word>", time the reply.
-    struct Shot {
-        std::string typed;
-        double seconds;
-    };
-    virtual Shot shoot(const std::string &word) = 0;
+    // The shooting minigame. The original asked you to type a word ("BANG") and timed
+    // you; here the front end plays a shooting round at whatever the situation calls for
+    // and reports how long a clean kill took, in the same units the BASIC used
+    // (seconds: 1 or less is a perfect shot). 9 or more means you missed.
+    enum class Target { Game, Riders, Bandits, Wolves };
+    virtual double shoot(Target target) = 0;
 };
 
 // Original bugs/typos we know of. Off = bug-for-bug original behaviour.
@@ -42,9 +42,6 @@ struct Options {
     // Fort purchases accept negative amounts (line 2340): no cash changes hands,
     // but the item stock shrinks by 2/3 of the amount. Pure self-harm.
     bool fixNegativeFortSpend = false;
-    // Extra seconds of grace on the shooting word (the 2018 port added 2 for
-    // modern keyboards; the 1978 original had 0).
-    double shootingSlack = 0.0;
 };
 
 enum class Outcome { Arrived, Died };
@@ -70,7 +67,7 @@ private:
     void event();
     void mountains();
     void illness();
-    double shoot();                 // SHOOTING SUB-ROUTINE; returns B1
+    double shoot(Frontend::Target t);   // SHOOTING SUB-ROUTINE; returns B1
     [[noreturn]] void diedOf();     // "YOU DIED OF ..." then epilogue
     [[noreturn]] void epilogue();   // the funeral formalities
     void finalTurn();

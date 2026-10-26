@@ -32,11 +32,28 @@ set(CMAKE_AUTOMOC ON)
 add_executable(oregontrail
     src/qt/main.cpp src/qt/appwindow.cpp src/qt/appwindow.h
     src/qt/trailgame.cpp src/qt/trailgame.h src/qt/pixelart.cpp src/qt/pixelart.h
-    src/qt/classicgame.cpp src/qt/classicgame.h src/qt/gamebridge.cpp src/qt/gamebridge.h)
-target_link_libraries(oregontrail PRIVATE trail oregon Qt6::Widgets)
-add_executable(render_art tests/render_art.cpp src/qt/pixelart.cpp)
+    src/qt/fightview.cpp src/qt/fightview.h src/qt/pixelview.cpp src/qt/pixelview.h src/qt/shootview.cpp src/qt/shootview.h src/qt/classicgame.cpp src/qt/classicgame.h src/qt/gamebridge.cpp src/qt/gamebridge.h
+    src/qt/graveyard.cpp src/qt/graveyard.h)
+target_link_libraries(oregontrail PRIVATE trail fight oregon Qt6::Widgets)
+add_executable(render_art tests/render_art.cpp src/qt/pixelart.cpp src/qt/fightview.cpp)
 target_include_directories(render_art PRIVATE src)
-target_link_libraries(render_art PRIVATE trail Qt6::Gui)
-add_executable(smoke_gui tests/smoke_gui.cpp src/qt/trailgame.cpp src/qt/trailgame.h src/qt/pixelart.cpp src/qt/pixelart.h)
+target_link_libraries(render_art PRIVATE trail fight Qt6::Gui)
+add_executable(smoke_gui tests/smoke_gui.cpp src/qt/trailgame.cpp src/qt/trailgame.h src/qt/pixelart.cpp src/qt/pixelart.h src/qt/fightview.cpp src/qt/fightview.h src/qt/pixelview.cpp src/qt/pixelview.h src/qt/shootview.cpp src/qt/shootview.h
+    src/qt/classicgame.cpp src/qt/classicgame.h src/qt/gamebridge.cpp src/qt/gamebridge.h
+    src/qt/graveyard.cpp src/qt/graveyard.h)
 target_include_directories(smoke_gui PRIVATE src)
-target_link_libraries(smoke_gui PRIVATE trail oregon Qt6::Widgets)
+target_link_libraries(smoke_gui PRIVATE trail fight oregon Qt6::Widgets)
+
+# First-person shootout simulation (Qt-free).
+add_library(fight STATIC src/fight/fight.cpp)
+target_include_directories(fight PUBLIC src)
+target_link_libraries(fight PUBLIC oregon)
+target_compile_options(fight PRIVATE -Wall -Wextra)
+add_executable(test_fight tests/test_fight.cpp)
+target_link_libraries(test_fight PRIVATE fight)
+add_test(NAME fight COMMAND test_fight)
+
+add_executable(test_graveyard tests/test_graveyard.cpp src/qt/graveyard.cpp)
+target_include_directories(test_graveyard PRIVATE src)
+target_link_libraries(test_graveyard PRIVATE Qt6::Core)
+add_test(NAME graveyard COMMAND test_graveyard)
