@@ -100,6 +100,26 @@ Qt Multimedia is installed (`/usr/include/qt6/QtMultimedia`).
 - [ ] Every file is in `assets/CREDITS.md` with a licence we are allowed to ship
 - [ ] Volume and mute work and persist; the game runs fine with no audio device
 
+## Before promoting it publicly
+
+The repository is already public; this is the list for when it is ready to be shown off.
+
+- [ ] **Screenshots in the README.** `build/render_art <dir>` dumps every scene to PNG
+      (road, forts, river crossings, fights, tombstone). Pick a handful, add a short gameplay
+      GIF, and put them near the top of the README
+- [ ] Play it by hand, start to finish, in both modes. Everything so far was checked by tests,
+      renders and scripted drivers, never by a person
+- [ ] Tune what only a human can judge: the shooting feel, the Classic shot constants
+      (`src/qt/classicgame.cpp`), the 1985 balance (`src/trail/tuning.h`)
+- [ ] Sound and music, with every file's licence recorded (see above)
+- [ ] CI that builds and runs the tests on every push (the GUI smoke tests need
+      `QT_QPA_PLATFORM=offscreen`)
+- [ ] Packaging: an Arch `PKGBUILD` first (this machine runs CachyOS), then a plain `make`
+      install for other distributions
+- [ ] A tagged release with a short changelog
+- [ ] Re-read the README for claims that are no longer true or are not proven, especially
+      anything about the 1985 rules (we do not have its source and say so)
+
 ## Other ideas (not scheduled)
 
 - Trading with other travellers; the Columbia River raft versus the Barlow toll road; route
