@@ -5,7 +5,7 @@ A C++20 / Qt6 port of The Oregon Trail, in two rulesets.
 | Mode | What it is |
 |---|---|
 | **1985 rules** (default) | Graphical game: professions, a party of five, pace and rations, landmarks, rivers, per-person illness, tombstones, scoring, and first-person hunting and gunfights (see below). |
-| **Classic 1978** (Game menu) | A line-for-line transcode of the May/June 1978 *Creative Computing* listing (Heinemann 1971, Rawitsch, Dillenberger, MECC), in a text window. Its "TYPE BANG" timing is replaced by a short first-person shooting round at the right target (a deer, a wolf, riders, bandits). |
+| **Classic 1978** (Game menu) | A line-for-line transcode of the 1978 *Creative Computing* listing (Heinemann 1971, Rawitsch, Dillenberger, MECC), in a text window. Its "TYPE BANG" timing is replaced by a short first-person shooting round at the right target (a deer, a wolf, riders, bandits). |
 
 ## Honesty about "1985"
 

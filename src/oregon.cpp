@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
-// Transcode of OREGON (Creative Computing, May/June 1978). The comment at the
+// Transcode of OREGON (Creative Computing, 1978). The comment at the
 // head of each block gives the original line range so it can be checked against
 // docs/original/oregon-1978-creative-computing.bas. The order of RND(1) calls is
 // kept identical to the original, so a scripted Rng reproduces BASIC runs.

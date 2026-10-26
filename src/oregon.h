@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
-// Oregon Trail engine: a structured C++ transcode of the May/June 1978
+// Oregon Trail engine: a structured C++ transcode of the 1978
 // Creative Computing listing (Heinemann 1971, Rawitsch/Dillenberger, MECC).
 // No Qt, no I/O of its own: everything the player sees or types goes through
 // Frontend, and all randomness through Rng, so the game is fully testable.
