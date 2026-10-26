@@ -66,4 +66,6 @@ Other targets: `sim [games] [reckless]` (win rates per profession and month),
 - `src/qt/` - the interface: `trailgame` (1985 game + hunting), `pixelart`
   (all artwork), `classicgame` + `gamebridge` (1978 text mode on a worker thread)
 
+Planned work (next up: sound and music, with licensing notes) is in [TODO.md](TODO.md).
+
 License: GPL-3.0-or-later.
