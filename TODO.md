@@ -100,6 +100,23 @@ Qt Multimedia is installed (`/usr/include/qt6/QtMultimedia`).
 - [ ] Every file is in `assets/CREDITS.md` with a licence we are allowed to ship
 - [ ] Volume and mute work and persist; the game runs fine with no audio device
 
+## High scores
+
+Not there yet. The score is worked out when you reach Oregon City (`Trail::score()`, with the
+profession's multiplier) and shown once on the victory screen, then forgotten.
+
+- [ ] A saved top-ten list, in the same kind of small JSON file as `graves.json` (same
+      atomic save, same tolerance for a missing or damaged file, same `OREGONTRAIL_DATA_DIR`
+      override so tests never touch the real one). Each entry: name, points, profession,
+      survivors, arrival date, departure month
+- [ ] Ask for a name when the score makes the list; show the list on the victory screen and
+      from the Game menu
+- [ ] Decide what counts: only games that reach Oregon (as now), and whether Classic 1978 gets
+      its own list. It has no scoring in the BASIC, so probably not
+- [ ] Decide whether the 1985 point values are ours to tune (they are: `Trail::score()` and
+      `tuning.h`, not taken from the original) and whether to show a rating title as well
+- [ ] Unit-test the list: ordering, ties, trimming to ten, damaged file
+
 ## Before promoting it publicly
 
 The repository is already public; this is the list for when it is ready to be shown off.
