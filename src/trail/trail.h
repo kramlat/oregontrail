@@ -29,7 +29,7 @@ enum class Health { Good, Fair, Poor, VeryPoor, Dead };
 enum class Terrain { Plains, Hills, Rockies, Desert, BlueMountains, Cascades };
 enum class Kind { Start, Landmark, Fort, River, End };
 enum class Weather { Hot, Warm, Cool, Cold, Rain, Snow };
-enum class Method { Ford, Caulk, Ferry, Wait };
+enum class Method { Ford, Caulk, Ferry, Wait, Search };   // Search: look for a better crossing
 enum class Encounter { None, Bandits, Wolves };
 
 // A tombstone left by someone who died in an earlier game (kept by the front end's save file).
@@ -107,6 +107,12 @@ public:
 
     // --- Rivers ---
     const River &river() const { return river_; }
+    // How the latest Ford/Caulk/Ferry crossing went, so the front end can show it.
+    struct CrossReport {
+        Method method = Method::Ford;
+        bool swamped = false, drowned = false;
+    };
+    const CrossReport &lastCrossing() const { return report_; }
     std::vector<Note> cross(Method);
 
     // --- Hunting: the UI plays the minigame and reports pounds brought back.
@@ -157,6 +163,7 @@ private:
     int next_ = 1;
     bool atLandmark_ = false;
     River river_;
+    CrossReport report_;
     std::vector<Grave> graves_, passed_;
     Encounter encounter_ = Encounter::None;
     int encounterSize_ = 0;

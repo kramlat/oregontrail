@@ -30,6 +30,13 @@ void tombstone(QImage &img, const QString &name, const QString &cause, const QSt
                const QString &epitaph = {});
 void oregonCity(QImage &img);
 
+// A river crossing, seen from above: the river runs across the screen and the wagon
+// and its four oxen cross it, bottom (near bank) to top (far bank). `progress` runs
+// 0..1. A swamping spills the cargo; a drowning leaves a hat floating.
+enum class Crossing { Ford, Caulk, Ferry };
+void riverCrossingScene(QImage &img, Crossing how, double progress, int frame, double widthFt, double depthFt,
+                        bool swamped, bool drowned);
+
 enum class Animal { Rabbit, Deer, Bison, Wolf, Bandit };
 struct Sprite { int w, h; };
 Sprite animalSize(Animal a);

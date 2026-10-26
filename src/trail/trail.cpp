@@ -610,6 +610,22 @@ std::vector<Note> Trail::cross(Method m)
         river_.depthFt = std::max(0.8, depth + (r() - 0.55) * 0.8);
         return n;
     }
+    if (m == Method::Search) {
+        // A day spent riding along the bank. Usually there's a shallower spot; sometimes not.
+        passDay(true, n);
+        if (wiped) return n;
+        if (r() < 0.6) {
+            river_.depthFt = std::max(0.8, depth - (0.3 + r() * 1.0));
+            river_.widthFt = 80 + r() * 600;
+            n.push_back({"You found a better place to cross: about " + std::to_string(int(river_.widthFt)) +
+                             " feet wide and " + std::to_string(int(river_.depthFt * 10) / 10.0).substr(0, 3) + " feet deep.", false});
+        } else {
+            river_.depthFt = depth + r() * 0.5;
+            n.push_back({"You rode along the bank but found nothing better. If anything, the river looks deeper here.", true});
+        }
+        return n;
+    }
+    report_ = CrossReport{m, false, false};
     double fail = 0, drown = 0;
     if (m == Method::Ford) {
         fail = depth <= 2.5 ? 0.05 : depth <= 3.5 ? 0.30 : 0.65;
@@ -633,6 +649,7 @@ std::vector<Note> Trail::cross(Method m)
 
     if (wiped) return n;
     if (r() < fail) {
+        report_.swamped = true;
         n.push_back({"The wagon was swamped!", true});
         double food = std::floor(sup.food * (0.2 + r() * 0.4));
         sup.food -= food;
@@ -640,7 +657,10 @@ std::vector<Note> Trail::cross(Method m)
         sup.bullets -= int(sup.bullets * r() * 0.5);
         n.push_back({"You lost " + std::to_string(int(food)) + " pounds of food and other supplies.", true});
         if (r() < drown) {
-            if (Member *v = randomLiving()) kill(*v, n, "drowning");
+            if (Member *v = randomLiving()) {
+                kill(*v, n, "drowning");
+                report_.drowned = true;
+            }
         }
     } else {
         n.push_back({"You made it across safely.", false});

@@ -91,7 +91,7 @@ static int runFull(QApplication &app, int seconds)
 {
     TrailGame game;
     game.resize(900, 760);
-    game.setDayTickMs(2);                      // fast wagon; fights still run in real time
+    game.setFastForTests();                    // fast wagon and river animations; fights run in real time
     game.show();
     int won = 0, lost = 0, dialogs = 0, keys = 0, shots = 0;
     QStringList seen;
@@ -109,7 +109,13 @@ static int runFull(QApplication &app, int seconds)
             bool river = false;
             for (auto *b : m->findChildren<QPushButton *>())
                 if (b->text().contains("Ford") && b->isEnabled()) river = true;
-            if (river) {                       // cross by ferry when we can, otherwise caulk
+            if (river) {                       // sometimes look for a better crossing first; then ferry, else caulk
+                static int searches = 0;
+                for (auto *b : m->findChildren<QPushButton *>())
+                    if (b->text().startsWith("Look for") && b->isEnabled() && searches < 12 && (++searches % 3) == 1) {
+                        b->click();
+                        return;
+                    }
                 QPushButton *pick = nullptr;
                 for (auto *b : m->findChildren<QPushButton *>()) {
                     if (b->text().contains("ferry") && b->isEnabled()) pick = b;
@@ -150,6 +156,7 @@ static int runFull(QApplication &app, int seconds)
     QTimer::singleShot(0, [&] { game.newGame(); });
     QTimer::singleShot(seconds * 1000, &app, &QApplication::quit);
     int rc = app.exec();
+    std::printf("(searched for a better crossing in the GUI)\n");
     std::printf("smoke full: %d games reached Oregon, %d ended on the trail, %d dialogs, %d shooting inputs\n",
                 won, lost, dialogs, shots);
     std::printf("dialog titles seen: %s\n", seen.join(" | ").toStdString().c_str());

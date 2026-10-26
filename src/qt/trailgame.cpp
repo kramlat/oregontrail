@@ -7,6 +7,7 @@
 #include <QDialog>
 #include <QDialogButtonBox>
 #include <QElapsedTimer>
+#include <QEventLoop>
 #include <QFontDatabase>
 #include <QFormLayout>
 #include <QGridLayout>
@@ -171,6 +172,7 @@ TrailGame::TrailGame(QWidget *parent) : QWidget(parent)
     setFocusPolicy(Qt::StrongFocus);
 
     connect(view_, &ShootView::finished, this, &TrailGame::endShooting);
+    connect(view_, &PixelView::clicked, this, [this](QPoint) { if (animating_) skipAnim_ = true; });
 
     timer_ = new QTimer(this);
     timer_->setInterval(90);
@@ -180,7 +182,11 @@ TrailGame::TrailGame(QWidget *parent) : QWidget(parent)
 
 TrailGame::~TrailGame() = default;
 
-void TrailGame::setDayTickMs(int ms) { timer_->setInterval(ms); }
+void TrailGame::setFastForTests()
+{
+    timer_->setInterval(2);
+    animScale_ = 0.02;
+}
 
 bool TrailGame::setup()
 {
@@ -350,6 +356,7 @@ void TrailGame::refresh()
 
 void TrailGame::tick()
 {
+    if (animating_) return;             // a river crossing owns the picture for now
     if (mode_ == Mode::Shoot) return;   // the ShootView drives hunts and fights
     if (mode_ != Mode::Travel || !t_) return;
     ++frame_;
@@ -461,6 +468,39 @@ void TrailGame::landmarkArrival()
     if (l.kind == Kind::Fort) shop();
 }
 
+// The crossing, seen from above. The engine has already decided how it went; this shows it.
+// Click or press a key to skip.
+void TrailGame::playCrossing(Method m)
+{
+    const art::Crossing how = m == Method::Ford ? art::Crossing::Ford : m == Method::Caulk ? art::Crossing::Caulk
+                                                                                          : art::Crossing::Ferry;
+    const Trail::CrossReport rep = t_->lastCrossing();
+    const double seconds = (m == Method::Ford ? 3.4 : m == Method::Caulk ? 3.8 : 5.0) * animScale_;
+    const double width = t_->river().widthFt, depth = t_->river().depthFt;
+
+    animating_ = true;
+    skipAnim_ = false;
+    QElapsedTimer clock;
+    clock.start();
+    QEventLoop loop;
+    QTimer step;
+    step.setInterval(33);
+    int frame = 0;
+    connect(&step, &QTimer::timeout, &loop, [&] {
+        double p = seconds > 0 ? clock.elapsed() / 1000.0 / seconds : 1.0;
+        if (skipAnim_ || p >= 1) {
+            loop.quit();
+            return;
+        }
+        art::riverCrossingScene(view_->image, how, p, frame++, width, depth, rep.swamped, rep.drowned);
+        view_->update();
+    });
+    connect(this, &QObject::destroyed, &loop, &QEventLoop::quit);
+    step.start();
+    loop.exec();
+    animating_ = false;
+}
+
 void TrailGame::riverArrival()
 {
     for (;;) {
@@ -489,17 +529,23 @@ void TrailGame::riverArrival()
         add("Ford the river", Method::Ford);
         add("Caulk the wagon and float it across", Method::Caulk);
         add(QString("Take the ferry ($%1)").arg(r.ferryCost, 0, 'f', 0), Method::Ferry, t_->sup.cash >= r.ferryCost);
+        add("Look for a better crossing (takes a day)", Method::Search);
         add("Wait a day", Method::Wait);
         d.exec();
 
         auto notes = t_->cross(chosen);
+        const bool crossed = chosen == Method::Ford || chosen == Method::Caulk || chosen == Method::Ferry;
+        if (crossed && !t_->wiped && !t_->atLandmark())
+            playCrossing(chosen);
         absorb(notes);
         deaths(notes);
         refresh();
         if (t_->wiped) { defeat(); return; }
+        QString msg;
+        for (auto &n : notes) msg += QString::fromStdString(n.text) + "\n";
+        if (chosen == Method::Search)
+            QMessageBox::information(this, "Looking for a better crossing", msg.trimmed());
         if (!t_->atLandmark()) {
-            QString msg;
-            for (auto &n : notes) msg += QString::fromStdString(n.text) + "\n";
             QMessageBox::information(this, "River crossing", msg.trimmed());
             return;
         }
@@ -557,6 +603,10 @@ void TrailGame::startHunt()
 // Keyboard: space toggles travel; Enter ends a hunt.
 void TrailGame::keyPressEvent(QKeyEvent *e)
 {
+    if (animating_) {
+        skipAnim_ = true;
+        return;
+    }
     if (mode_ == Mode::Shoot) {
         if (!view_->handleKey(e, true)) QWidget::keyPressEvent(e);
         return;

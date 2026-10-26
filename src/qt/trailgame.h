@@ -25,7 +25,7 @@ public:
     ~TrailGame() override;
 
 public:
-    void setDayTickMs(int ms);                // test seam: how fast the wagon animates
+    void setFastForTests();                   // test seam: quick days, near-instant river animations
 
 public slots:
     void newGame();
@@ -60,6 +60,7 @@ private:
     void refresh();
     void landmarkArrival();
     void riverArrival();
+    void playCrossing(trail::Method m);
     void victory();
     void defeat();
     void startFight();
@@ -71,6 +72,8 @@ private:
     Mode mode_ = Mode::Idle;
     bool going_ = false;
     bool over_ = false;
+    bool animating_ = false, skipAnim_ = false;   // a river crossing is playing
+    double animScale_ = 1.0;
     double scroll_ = 0;
     int frame_ = 0, dayTicks_ = 0;
     QStringList recent_;

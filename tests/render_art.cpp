@@ -65,6 +65,22 @@ int main(int argc, char **argv)
         renderFight(img, f);
         save(img, dir, wolves ? "fight_wolves" : "fight_bandits");
     }
+    {   // river crossings, top-down: a calm ford, a swamping, a caulked wagon, the ferry, a drowning
+        struct C { const char *name; art::Crossing how; double p; double width, depth; bool swamp, drown; };
+        const C cs[] = {
+            {"cross_ford_calm", art::Crossing::Ford, 0.50, 300, 1.8, false, false},
+            {"cross_ford_swamp", art::Crossing::Ford, 0.60, 420, 4.0, true, false},
+            {"cross_caulk", art::Crossing::Caulk, 0.50, 420, 3.4, false, false},
+            {"cross_ferry", art::Crossing::Ferry, 0.50, 500, 3.0, false, false},
+            {"cross_drown", art::Crossing::Ford, 0.72, 420, 4.0, true, true},
+            {"cross_start", art::Crossing::Ford, 0.05, 300, 2.0, false, false},
+        };
+        for (auto &c : cs) {
+            QImage img = art::newCanvas();
+            art::riverCrossingScene(img, c.how, c.p, 3, c.width, c.depth, c.swamp, c.drown);
+            save(img, dir, c.name);
+        }
+    }
     QImage t = art::newCanvas();
     art::tombstone(t, "Anna", "dysentery", "July 4, 1848", "She loved the open road");
     save(t, dir, "tombstone");

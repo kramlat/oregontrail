@@ -194,6 +194,52 @@ static void testRiverGrave()
     CHECK(metAfter);
 }
 
+// "Look for a better crossing": costs a day, usually helps, never moves the wagon.
+static void testSearchForCrossing()
+{
+    int better = 0, worse = 0;
+    for (unsigned seed = 1; seed <= 300; ++seed) {
+        MtRng r(seed);
+        Trail t(r, Profession::Banker, 4, kNames);
+        t.buy(Item::Oxen, 4); t.buy(Item::Food, 1500); t.buy(Item::Clothing, 5);
+        for (int i = 0; i < 40 && !(t.atLandmark() && t.here().kind == Kind::River) && !t.wiped; ++i) t.travelDay();
+        if (!(t.atLandmark() && t.here().kind == Kind::River)) continue;
+        double depth = t.river().depthFt, miles = t.miles;
+        int day = t.day;
+        auto n = t.cross(Method::Search);
+        CHECK(t.day == day + 1 && t.miles == miles && t.atLandmark());      // a day, and we're still at the bank
+        CHECK(!n.empty() && t.river().depthFt >= 0.8);
+        (t.river().depthFt < depth ? better : worse)++;
+    }
+    CHECK(better > worse && worse > 0);        // mostly helps, but not always
+}
+
+// The report says what happened, so a front end can show it.
+static void testCrossReport()
+{
+    int swamped = 0, drowned = 0, safe = 0;
+    for (unsigned seed = 1; seed <= 400; ++seed) {
+        MtRng r(seed);
+        Trail t(r, Profession::Banker, 4, kNames);
+        t.buy(Item::Oxen, 4); t.buy(Item::Food, 1500); t.buy(Item::Clothing, 5);
+        for (int i = 0; i < 40 && !(t.atLandmark() && t.here().kind == Kind::River) && !t.wiped; ++i) t.travelDay();
+        if (!(t.atLandmark() && t.here().kind == Kind::River)) continue;
+        t.river();                                   // (deep river: ford is risky)
+        auto n = t.cross(Method::Ford);
+        auto rep = t.lastCrossing();
+        CHECK(rep.method == Method::Ford);
+        CHECK(!rep.drowned || rep.swamped);          // you can only drown in a swamping
+        bool saidSwamped = false, saidDied = false;
+        for (auto &x : n) {
+            saidSwamped |= x.text.find("swamped") != std::string::npos;
+            saidDied |= x.text.find("died of drowning") != std::string::npos;
+        }
+        CHECK(saidSwamped == rep.swamped && saidDied == rep.drowned);
+        (rep.drowned ? drowned : rep.swamped ? swamped : safe)++;
+    }
+    CHECK(safe > 0 && swamped + drowned > 0);
+}
+
 // Fights: killing everything costs nothing; killing nothing costs something.
 static void testEncounters()
 {
@@ -286,6 +332,8 @@ int main()
     testScoreMultiplier();
     testGraves();
     testRiverGrave();
+    testSearchForCrossing();
+    testCrossReport();
     testEncounters();
     testReturnFireAftermath();
     testFuzz();
