@@ -81,6 +81,14 @@ int main(int argc, char **argv)
             save(img, dir, c.name);
         }
     }
+    {   // the title screen, with each menu item highlighted in turn
+        const QStringList items = {"NEW GAME", "CLASSIC 1978 (TEXT)", "MUSIC: ON", "QUIT"};
+        for (int sel : {0, 1}) {
+            QImage img = art::newCanvas();
+            art::titleScene(img, 7, 40.0, items, sel);
+            save(img, dir, QString("title_%1").arg(sel));
+        }
+    }
     QImage t = art::newCanvas();
     art::tombstone(t, "Anna", "dysentery", "July 4, 1848", "She loved the open road");
     save(t, dir, "tombstone");

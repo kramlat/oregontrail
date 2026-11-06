@@ -1,9 +1,11 @@
 # TODO
 
-## Sound and music (the game is silent right now)
+## Sound and music
 
-Goal for next week: **not silent.** A minimum set of effects and two music tracks,
-with a credits file, then polish later.
+**Music is in** (five public-domain tracks, a title screen, mute and volume; see
+`assets/CREDITS.md`). **Sound effects are next** and not started: the game has none yet.
+
+Goal: **not silent.** Music is done; what is left is the effects below, then polish.
 
 ### Licensing rules (decide before downloading anything)
 
@@ -51,9 +53,10 @@ about a day.
 
 ### Minimum viable set (do these first)
 
-Music (two tracks, looping, Ogg Vorbis):
-- [ ] Travel theme (folk fiddle/banjo, relaxed)
-- [ ] Fight tension (low drum or pulse), used for bandits, wolves and the Classic shots
+Music (looping, Ogg Vorbis): **done.**
+- [x] Title, travel, fight, victory and Taps tracks, played on the title screen, on the trail,
+      in gunfights, on arrival and at tombstones (the Classic mode plays the travel music)
+- [ ] Maybe: a quiet hunting theme, a fort tune, a different piece for the Classic mode
 
 Sound effects (WAV, short):
 - [ ] Rifle shot (player), and a different shot for the bandits' guns
@@ -78,12 +81,14 @@ Sound effects (WAV, short):
 
 Qt Multimedia is installed (`/usr/include/qt6/QtMultimedia`).
 
-- [ ] Add `Qt6::Multimedia` to the CMake targets that play sound
-- [ ] An `Audio` class: `QSoundEffect` for short effects (low latency), `QMediaPlayer` +
-      `QAudioOutput` for music with loop and crossfade; master / music / effects volume
-      and mute, saved with `QSettings`; **M** toggles mute; a Credits entry in the Game menu
-- [ ] **Never fail without a sound card:** the offscreen smoke tests and any machine
-      with no audio device must run silently, not crash (test this)
+- [x] `Qt6::Multimedia` is linked; `Audio` (`src/qt/audio.*`) plays the music with fades and
+      loops, saves mute and volume with `QSettings`, and **M** toggles mute
+- [x] It never fails without a sound card or files (`OREGONTRAIL_AUDIO=off`); tested
+- [x] `assets/audio/`, `assets/CREDITS.md`, and a test that every audio file is listed in the
+      credits and every credit has a file (`test_audio_assets`)
+- [ ] Sound effects: extend `Audio` with short effects (`QSoundEffect`, low latency) and a
+      separate effects volume
+- [ ] A Credits entry in the Game menu that shows `CREDITS.md`
 - [ ] The shooting field needs to report sound events (shot fired, target hit, bandit
       fired, bullet stopped by a prop, target reached the wagon, player hit). Add a small
       event queue to `fight::Field` (Qt-free, unit-tested) that `ShootView` drains and turns
@@ -91,8 +96,6 @@ Qt Multimedia is installed (`/usr/include/qt6/QtMultimedia`).
 - [ ] Hook the trail events (`trail::Note`s, deaths, graves, river results, victory, defeat)
       to sounds in `TrailGame`; keep the mapping in one table so it is easy to change
 - [ ] Classic mode: the same shooting-round sounds through `ClassicGame`
-- [ ] `assets/audio/`, `assets/CREDITS.md`, and a test that every audio file is listed in
-      the credits (so nothing ships unattributed)
 
 ### Done when
 

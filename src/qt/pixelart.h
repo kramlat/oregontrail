@@ -10,7 +10,9 @@
 #include <QColor>
 #include <QImage>
 #include <QPainter>
+#include <QRect>
 #include <QString>
+#include <QStringList>
 
 namespace art {
 
@@ -29,6 +31,12 @@ void landmarkScene(QImage &img, const trail::Landmark &l, int frame);
 void tombstone(QImage &img, const QString &name, const QString &cause, const QString &date,
                const QString &epitaph = {});
 void oregonCity(QImage &img);
+
+// The title screen: the wagon team on the trail at dusk, the title, and the menu.
+// `scroll` drifts the background; `selected` is the highlighted menu item.
+void titleScene(QImage &img, int frame, double scroll, const QStringList &items, int selected);
+// Where menu item `index` (with this text) is on the canvas, for mouse hit tests.
+QRect titleMenuRect(int index, const QString &text);
 
 // A river crossing, seen from above: the river runs across the screen and the wagon
 // and its four oxen cross it, bottom (near bank) to top (far bank). `progress` runs

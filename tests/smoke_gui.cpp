@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Drives the real GUI offscreen: auto-answers every dialog, fills the store,
 // hits Space to travel, and lets time pass. Passes if nothing crashes or hangs.
+#include "qt/appwindow.h"
+#include "qt/audio.h"
 #include "qt/classicgame.h"
 #include "qt/graveyard.h"
 #include "qt/shootview.h"
@@ -8,6 +10,7 @@
 
 #include <QApplication>
 #include <QDialog>
+#include <QEventLoop>
 #include <QKeyEvent>
 #include <QMouseEvent>
 #include <QMessageBox>
@@ -84,6 +87,74 @@ static int runClassic(QApplication &app, int seconds)
     if (auto *log = game.findChild<QPlainTextEdit *>())
         std::printf("---- end of the game text ----\n%s\n", log->toPlainText().right(700).toStdString().c_str());
     return rc;
+}
+
+// The window must open on the title screen and start nothing until the player chooses.
+static int runTitle()
+{
+    QTemporaryDir data;                           // never touch a real save or settings file
+    qputenv("OREGONTRAIL_DATA_DIR", data.path().toUtf8());
+    qputenv("OREGONTRAIL_AUDIO", "off");          // and make no sound
+    int fails = 0;
+    auto check = [&](bool ok, const char *what) {
+        std::printf("%s  %s\n", ok ? "ok  " : "FAIL", what);
+        if (!ok) ++fails;
+    };
+    auto pump = [](int ms) {
+        QEventLoop l;
+        QTimer::singleShot(ms, &l, &QEventLoop::quit);
+        l.exec();
+    };
+    auto key = [](QWidget *to, int k) {
+        QKeyEvent press(QEvent::KeyPress, k, Qt::NoModifier);
+        QApplication::sendEvent(to, &press);
+    };
+
+    AppWindow w;
+    w.show();
+    pump(700);
+    check(w.onTitle(), "the window opens on the title screen");
+    check(QApplication::activeModalWidget() == nullptr, "no dialog appeared: no game was started");
+    check(w.audio()->current() == Music::Title, "the title music is the one requested");
+
+    key(w.currentScreen(), Qt::Key_M);
+    check(w.audio()->muted(), "M on the title screen turns the music off");
+    key(w.currentScreen(), Qt::Key_M);
+    check(!w.audio()->muted(), "and on again");
+
+    // New Game: Enter on the first item opens the setup dialogs. Cancel the first one.
+    QString dialog;
+    QTimer::singleShot(400, [&] {
+        if (QWidget *m = QApplication::activeModalWidget()) {
+            dialog = m->windowTitle();
+            if (auto *d = qobject_cast<QDialog *>(m)) d->reject();
+        }
+    });
+    key(w.currentScreen(), Qt::Key_Return);       // blocks in the dialog until the timer cancels it
+    check(!dialog.isEmpty(), "choosing New Game opens the setup dialogs");
+    check(w.onTitle(), "cancelling the setup puts you back on the title screen");
+
+    // Classic 1978: Down, then Enter.
+    key(w.currentScreen(), Qt::Key_Down);
+    key(w.currentScreen(), Qt::Key_Return);
+    pump(300);
+    check(!w.onTitle(), "choosing Classic 1978 leaves the title screen");
+    check(w.audio()->current() == Music::Travel, "the trail music takes over");
+
+    // Back to the title: it asks first, because a journey is in progress.
+    bool asked = false;
+    QTimer::singleShot(400, [&] {
+        if (auto *mb = qobject_cast<QMessageBox *>(QApplication::activeModalWidget())) {
+            asked = true;
+            mb->button(QMessageBox::Yes)->click();
+        }
+    });
+    w.showTitle();
+    check(asked, "leaving a game in progress asks first");
+    check(w.onTitle() && w.audio()->current() == Music::Title, "and returns to the title screen and its music");
+
+    std::printf(fails ? "%d FAILED\n" : "title screen: all passed\n", fails);
+    return fails ? 1 : 0;
 }
 
 // Plays whole games to their end, starting a new one each time, and reports how they went.
@@ -175,6 +246,8 @@ int main(int argc, char **argv)
             seed.add({QString("Old%1").arg(mile), "cholera", "May 5, 1848", "Gone west", mile});
         seed.save();
     }
+    if (argc > 3 && QString(argv[3]) == "title")
+        return runTitle();
     if (argc > 3 && QString(argv[3]) == "full")
         return runFull(app, argc > 1 ? QString(argv[1]).toInt() : 60);
     if (argc > 3 && QString(argv[3]) == "classic")

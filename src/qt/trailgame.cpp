@@ -253,23 +253,31 @@ bool TrailGame::setup()
     return true;
 }
 
-void TrailGame::newGame()
+bool TrailGame::newGame()
 {
+    going_ = false;                       // an old game waits while the setup dialogs are up
+    if (!setup()) return false;           // cancelled: the old game (if any) is untouched
     timer_->stop();
     mode_ = Mode::Idle;
-    going_ = false;
     over_ = false;
     recent_.clear();
     leaderGrave_ = QImage();
     scroll_ = 0;
-    if (!setup()) {
-        if (!t_) return;
-    }
     mode_ = Mode::Travel;
     absorb({{"You set out from Independence, Missouri.", false}});
     refresh();
     timer_->start();
     setFocus();
+    emit music(Music::Travel);
+    return true;
+}
+
+void TrailGame::abandon()
+{
+    view_->take();                        // end any shooting round
+    timer_->stop();
+    going_ = false;
+    mode_ = Mode::Idle;
 }
 
 void TrailGame::absorb(const std::vector<Note> &notes)
@@ -282,6 +290,7 @@ void TrailGame::absorb(const std::vector<Note> &notes)
 // The Apple II asked the player what to put on the stone; so do we.
 QImage TrailGame::grave(const QString &name, const QString &cause)
 {
+    emit music(Music::Taps);
     QInputDialog ask(this);
     ask.setWindowTitle("Tombstone");
     ask.setInputMode(QInputDialog::TextInput);
@@ -326,6 +335,7 @@ void TrailGame::deaths(const std::vector<Note> &notes)
             leaderGrave_ = img;
         showPicture(this, img, "Sad news", QString("%1 has died of %2.").arg(m.captured(1), m.captured(2)));
     }
+    if (!t_->wiped && !over_ && mode_ != Mode::Idle) emit music(Music::Travel);   // back to the trail's music
 }
 
 void TrailGame::refresh()
@@ -554,6 +564,7 @@ void TrailGame::riverArrival()
 
 void TrailGame::victory()
 {
+    emit music(Music::Victory);
     over_ = true;
     going_ = false;
     QImage img = art::newCanvas();
@@ -627,6 +638,7 @@ void TrailGame::keyReleaseEvent(QKeyEvent *e)
 
 void TrailGame::beginShooting(std::unique_ptr<fight::Field> field)
 {
+    emit music(field->hunting() ? Music::Travel : Music::Fight);
     mode_ = Mode::Shoot;
     view_->begin(std::move(field));
     refresh();
@@ -663,6 +675,7 @@ void TrailGame::endShooting()
 {
     auto field = view_->take();
     mode_ = Mode::Travel;
+    emit music(Music::Travel);
     std::vector<Note> notes;
     if (field->hunting()) {
         notes = t_->huntDay(field->meat, field->shots);

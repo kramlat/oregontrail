@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "graveyard.h"
+#include "appdata.h"
 
 #include <QDir>
 #include <QFile>
@@ -8,16 +9,12 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QSaveFile>
-#include <QStandardPaths>
 
 GraveYard::GraveYard(QString path) : path_(std::move(path)) {}
 
 QString GraveYard::defaultPath()
 {
-    QString dir = qEnvironmentVariable("OREGONTRAIL_DATA_DIR");
-    if (dir.isEmpty())
-        dir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
-    return QDir(dir).filePath("graves.json");
+    return QDir(appDataDir()).filePath("graves.json");
 }
 
 void GraveYard::load()

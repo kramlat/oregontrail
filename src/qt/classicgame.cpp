@@ -86,6 +86,7 @@ void ClassicGame::stopGame()
 void ClassicGame::newGame()
 {
     stopGame();
+    finished_ = false;
     log_->clear();
     input_->setEnabled(false);
 
@@ -177,6 +178,7 @@ void ClassicGame::shotFinished()
 
 void ClassicGame::gameEnded(bool arrived)
 {
+    finished_ = true;
     append(arrived ? "\n*** You made it! ***   (Game menu > Classic 1978 for another go)\n"
                    : "\n*** Game over ***   (Game menu > Classic 1978 for another go)\n");
 }

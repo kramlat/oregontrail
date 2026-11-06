@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "pixelart.h"
+#include "pixelfont.h"
 
 #include <QFont>
 #include <QPolygon>
@@ -566,5 +567,91 @@ void drawAnimal(QPainter &p, Animal a, int x, int y, bool right, int frame)
 }
 
 void drawWagon(QPainter &p, int x, int y, int frame) { wagon(p, x, y, frame); }
+
+
+// ------------------------------------------------------------------ title screen
+
+namespace {
+
+constexpr int kTitleMenuTop = 128, kTitleMenuStep = 12;
+
+// Fill rows [y0, y1) with a checkerboard of two colours: the Apple II's way of making
+// a colour between two others.
+void dither(QPainter &p, int y0, int y1, const QColor &a, const QColor &b)
+{
+    for (int y = y0; y < y1; ++y)
+        for (int x = 0; x < W; ++x)
+            p.fillRect(x, y, 1, 1, ((x + y) & 1) ? a : b);
+}
+
+} // namespace
+
+QRect titleMenuRect(int index, const QString &text)
+{
+    const int w = pixelTextWidth(text) + 24;
+    return QRect(W / 2 - w / 2, kTitleMenuTop + index * kTitleMenuStep - 2, w, 11);
+}
+
+void titleScene(QImage &img, int frame, double scroll, const QStringList &items, int selected)
+{
+    Painter p(img);
+    const int horizon = 86;
+
+    // Dusk: black, through violet, to an orange glow at the horizon.
+    rect(p, 0, 0, W, 22, Black);
+    dither(p, 22, 30, Black, Violet);
+    rect(p, 0, 30, W, 16, Violet);
+    dither(p, 46, 54, Violet, Orange);
+    rect(p, 0, 54, W, horizon - 54, Orange);
+    for (int i = 0; i < 44; ++i) {                              // stars, twinkling
+        int x = (i * 53 + 7) % W, y = (i * 29) % 30;
+        if (((frame / 5) + i) % 9 != 0) rect(p, x, y, 1, 1, White);
+    }
+    p.setPen(Qt::NoPen);                                        // the setting sun
+    p.setBrush(Orange);
+    p.drawEllipse(QPoint(206, 62), 24, 24);
+    p.setBrush(White);
+    p.drawEllipse(QPoint(206, 62), 13, 13);
+    tiled(scroll * 0.2, 170, [&](int x) {                       // clouds drifting by
+        rect(p, x + 20, 66, 30, 3, Violet);
+        rect(p, x + 26, 63, 16, 3, Violet);
+    });
+    mountains(p, scroll * 0.15, 150, horizon, 28, false, Violet);
+    mountains(p, scroll * 0.35, 104, horizon + 3, 20, false, Black);
+
+    // The ground, and the trail with the wagon team on it.
+    rect(p, 0, horizon, W, H - horizon, Black);
+    tiled(scroll * 1.0, 38, [&](int x) {
+        rect(p, x + 3, 96, 1, 2, Green);
+        rect(p, x + 5, 97, 1, 1, Green);
+    });
+    rect(p, 0, 114, W, 6, Orange);
+    rect(p, 0, 117, W, 1, Violet);
+    tiled(scroll * 1.6, 28, [&](int x) { rect(p, x, 119, 8, 1, Black); });
+    const int bob = (frame / 3) & 1;
+    wagon(p, 40, 114 + bob, frame / 3);
+    ox(p, 100, 114 + bob, frame / 3);
+    ox(p, 132, 114 + bob, frame / 3 + 1);
+    rect(p, 127, 103 + bob, 5, 1, Black);
+
+    // The title.
+    drawPixelTextCentered(p, "THE", W / 2, 6, 2, White);
+    drawPixelTextCentered(p, "OREGON TRAIL", W / 2 + 2, 28, 3, Orange);   // shadow
+    drawPixelTextCentered(p, "OREGON TRAIL", W / 2, 26, 3, White);
+    drawPixelTextCentered(p, "A JOURNEY OF 2040 MILES - 1848", W / 2, 58, 1, Black);
+
+    // The menu.
+    for (int i = 0; i < items.size(); ++i) {
+        const bool sel = i == selected;
+        const int y = kTitleMenuTop + i * kTitleMenuStep;
+        drawPixelTextCentered(p, items[i], W / 2, y, 1, sel ? Orange : White);
+        if (sel && ((frame / 8) & 1) == 0) {                     // blinking arrows
+            const int w = pixelTextWidth(items[i]);
+            drawPixelText(p, ">", W / 2 - w / 2 - 10, y, 1, Orange);
+            drawPixelText(p, "<", W / 2 + w / 2 + 6, y, 1, Orange);
+        }
+    }
+    drawPixelTextCentered(p, "MUSIC: U.S. AIR FORCE BAND - PUBLIC DOMAIN", W / 2, 183, 1, Violet);
+}
 
 } // namespace art

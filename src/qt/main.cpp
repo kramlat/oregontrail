@@ -2,15 +2,12 @@
 #include "appwindow.h"
 
 #include <QApplication>
-#include <QTimer>
 
 int main(int argc, char **argv)
 {
     QApplication app(argc, argv);
     app.setApplicationName("oregontrail");
-    AppWindow w;
+    AppWindow w;      // opens on the title screen; a game starts only when the player chooses one
     w.show();
-    // Start a game once the window is up (the setup dialogs need a parent).
-    QTimer::singleShot(0, &w, [&w] { QMetaObject::invokeMethod(&w, "playTrail"); });
     return app.exec();
 }

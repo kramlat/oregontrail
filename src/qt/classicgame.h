@@ -22,6 +22,7 @@ public:
     explicit ClassicGame(QWidget *parent = nullptr);
     ~ClassicGame() override;
     void stopGame();
+    bool inProgress() const { return worker_ && !finished_; }
 
 public slots:
     void newGame();
@@ -43,4 +44,5 @@ private:
     QThread *worker_ = nullptr;
     std::unique_ptr<oregon::Rng> rng_;    // dice for the shooting rounds (GUI thread)
     int target_ = 0;
+    bool finished_ = false;
 };

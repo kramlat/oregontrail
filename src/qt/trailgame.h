@@ -3,6 +3,7 @@
 
 #include "fight/fight.h"
 #include "graveyard.h"
+#include "music.h"
 #include "trail/trail.h"
 
 #include <QImage>
@@ -27,8 +28,14 @@ public:
 public:
     void setFastForTests();                   // test seam: quick days, near-instant river animations
 
+    bool inProgress() const { return t_ && !over_ && mode_ != Mode::Idle; }
+    void abandon();                           // stop the current game (back to the title)
+
 public slots:
-    void newGame();
+    bool newGame();                           // false if the player cancelled the setup
+
+signals:
+    void music(Music m);                      // what should be playing now
 
 protected:
     void keyPressEvent(QKeyEvent *) override;

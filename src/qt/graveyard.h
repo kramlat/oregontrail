@@ -17,8 +17,7 @@ public:
 
     explicit GraveYard(QString path = defaultPath());
 
-    // $OREGONTRAIL_DATA_DIR/graves.json if that variable is set (tests use it), otherwise
-    // the user's application data directory.
+    // graves.json in appDataDir().
     static QString defaultPath();
 
     void load();                         // a missing or damaged file just means an empty yard
